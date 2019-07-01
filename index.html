@@ -1,0 +1,166 @@
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Gradient Boosting</title>
+    <meta charset="utf-8">
+        <style>
+       @import url(https://fonts.googleapis.com/css?family=Garamond);
+       @import url(https://fonts.googleapis.com/css?family=Muli:400,700,400italic);
+       @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+     </style>
+     <link rel="stylesheet" href="../style.css">
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Gradient Boosting
+
+---
+
+# Outline
+
+1. Gradient Boosting is a gradient descent
+2. Making it fast with histograms
+3. Numba
+4. Cython?
+
+
+---
+
+# Gradient Boosting
+
+`$$\hat{y}_i = \sum_{m = 1}^{\text{n_iter}} h_m(\mathbf{x}_i)$$`
+
+This is a gradient descent!
+
+$h_m$: "weak" estimator that predicts **gradients** (not the target!)
+
+--
+
+----
+
+Very analoguous to GD for parameter estimation (e.g. linear regression):
+
+- Linear regression: optimize loss w.r.t a parameter
+
+- Gradient boosting: optimize loss w.r.t. "the predictions"
+
+
+---
+
+#### Linear regression
+
+Loss: $\mathcal{L} = \sum_i (y_i - \hat{y}_i)^2$ where $\hat{y}_i = \mathbf{x}_i^T\mathbf{\theta}$
+
+Derive loss w.r.t. $\mathbf{\theta}$
+
+$$\mathbf{\theta}^{(m + 1)} = \mathbf{\theta}^{(m)} - \text{learning_rate} *
+\frac{\partial \mathcal{L}}{\partial \mathbf{\theta}^{(m)}}$$
+
+--
+
+----
+
+#### Gradient Boosting
+
+Loss: $\mathcal{L} = \sum_i (y_i - \hat{y}_i)^2\ \ \ \ \ \ \ \ \ \ \ \ \ \
+\ \ \ \hat{\mathbf{y}} =
+(\hat{y}_1, ..., \hat{y}_n)$
+
+The loss is a function of $\hat{\mathbf{y}} \in \mathcal{R}^n$ too! (Just like it is a
+function of $\mathbf{\theta} \in \mathcal{R}^d$)
+
+
+Derive loss w.r.t. **the predictions** $\hat{\mathbf{y}}$
+
+$$\hat{\mathbf{y}}^{(m + 1)} = \hat{\mathbf{y}}^{(m)} - \text{learning_rate} *
+   \frac{\partial \mathcal{L}}{\partial \hat{\mathbf{y}}^{(m)}}$$
+
+---
+
+$$\hat{\mathbf{y}}^{(m + 1)} = \hat{\mathbf{y}}^{(m)} - \text{learning_rate} *
+   \frac{\partial \mathcal{L}}{\partial \hat{\mathbf{y}}^{(m)}}$$
+
+```py
+def compute_gradient(y_true, y_pred):
+    return -2 * (y_true - y_pred)
+
+y_pred = np.zeros(shape=n_samples)  # (or some better init)
+for m in range(n_iterations):
+    negative_gradient = -compute_gradient(y_true, y_pred)
+    y_pred += learning_rate * negative_gradient
+
+    # save loss value for plotting (least squares loss)
+    loss_values.append(np.mean((y_true_train - y_pred_train)**2))
+```
+.center[![:scale 80%](loss_vs_iter.png)]
+
+---
+
+```py
+for m in range(n_iterations):
+    negative_gradient = -compute_gradient(y_true, y_pred)
+    y_pred += learning_rate * negative_gradient
+```
+
+OK but how do I compute predictions for unseen samples?
+
+Let a weak predictor $h$ try to predict the gradients!
+
+```py
+for m in range(n_iterations):
+    negative_gradient = -compute_gradient(y_true, y_pred)
+    h = WeakEstimator().fit(X, y=negative_gradient)
+    y_pred += learning_rate * h.predict(X)
+    self.predictors.append(h)  # save predictor for later
+```
+
+```py
+def predict(X):
+    pred = np.zeros(...)
+    for h in self.predictors:
+        pred += h.predict(X)
+    return pred
+```
+
+`$$\hat{y}_i = \sum_{m = 1}^{\text{n_iter}} h_m(\mathbf{x}_i)$$`
+
+That's our gradient descent!
+
+    </textarea>
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+    <script>
+    // Config Remark
+    remark.macros['scale'] = function (percentage) {
+        var url = this;
+        return '<img src="' + url + '" style="width: ' + percentage + '" />';
+    };
+    config_remark = {
+        // highlightStyle: 'magula',
+        // highlightSpans: true,
+        // highlightLines: true,
+        // ratio: "16:9"
+    };
+      var slideshow = remark.create(config_remark);
+    // Configure MathJax
+    MathJax.Hub.Config({
+    tex2jax: {
+        inlineMath: [['$','$'], ['\\(','\\)']],
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'] /* removed 'code' entry*/
+    }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for(i = 0; i < all.length; i += 1) {
+            all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+    });
+    </script>
+  </body>
+</html>
