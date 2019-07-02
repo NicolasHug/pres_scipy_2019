@@ -114,7 +114,7 @@ Let a weak predictor $h$ try to predict the gradients!
 ```py
 for m in range(n_iterations):
     negative_gradient = -compute_gradient(y_true, y_pred)
-    h = WeakEstimator().fit(X, y=negative_gradient)
+    h = DecisionTree().fit(X, y=negative_gradient)
     y_pred += learning_rate * h.predict(X)
     self.predictors.append(h)  # save predictor for later
 ```
@@ -130,6 +130,142 @@ def predict(X):
 `$$\hat{y}_i = \sum_{m = 1}^{\text{n_iter}} h_m(\mathbf{x}_i)$$`
 
 That's our gradient descent!
+
+---
+
+### Receipe for Gradient Boosting
+
+1. Optimize loss w.r.t **predictions** instead of a model parameter
+2. Predict the gradient step with a base estimator (a regressor)
+3. Use these base estimators to predict for unseen data
+
+```py
+for m in range(n_iterations):
+    negative_gradient = -compute_gradient(y_true, y_pred)
+    h = DecisionTree().fit(X, y=negative_gradient)
+    y_pred += learning_rate * h.predict(X)
+    self.predictors.append(h)  # save predictor for later
+```
+
+```py
+def predict(X):
+    pred = np.zeros(...)
+    for h in self.predictors:
+        pred += h.predict(X)
+    return pred
+```
+
+---
+
+# Making it fast
+
+```py
+for m in range(n_iterations):
+    ...
+    h = DecisionTree().fit(X, y=negative_gradient)
+    ...
+```
+
+.center[![:scale 60%](tree_building.jpg)]
+
+
+---
+
+### What is slow: split finding
+
+.center[![:scale 90%](splitting_1.jpg)]
+
+---
+
+### What is slow: split finding
+
+.center[![:scale 90%](splitting_2.jpg)]
+
+---
+
+### What is slow: split finding
+
+.center[![:scale 90%](splitting_3.jpg)]
+
+--
+
+.center[From $\mathcal{O}(n \log n)$ to $\mathcal{O} (n)$: Histograms]
+
+---
+
+### Bin the data!
+
+.center[![:scale 75%](binning_1.jpg)]
+
+We bin once and for all at the start of the fitting process
+
+---
+
+### Bin the data!
+
+.center[![:scale 75%](binning_2.jpg)]
+
+We bin once and for all at the start of the fitting process
+
+---
+
+### Bin the data!
+
+.center[![:scale 75%](binning_3.jpg)]
+
+We bin once and for all at the start of the fitting process
+
+Histograms are then computed at each node, for each feature
+
+---
+
+#### Before / Now
+
+.center[![:scale 85%](new_splitting_1.jpg)]
+
+---
+
+#### Before / Now
+
+.center[![:scale 85%](new_splitting_2.jpg)]
+
+---
+
+#### Before / Now
+
+.center[![:scale 85%](new_splitting_3.jpg)]
+
+---
+
+#### Before / Now
+
+.center[![:scale 85%](new_splitting_4.jpg)]
+
+---
+
+#### Before / Now
+
+.center[![:scale 85%](new_splitting_5.jpg)]
+
+
+---
+
+### Subtraction trick
+
+.center[![:scale 55%](hist_sub.jpg)]
+
+
+.center[Samples are mapped either to left or right child]
+
+.center[Hist(parent) = Hist(left) + Hist(right)]
+
+--
+
+.center[Use subtraction trick!]
+.center[c = a - b]
+
+.center[$\mathcal{O}(n)$ --> $\mathcal{O}(\text{n_bins})$]
+
 
     </textarea>
     <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
