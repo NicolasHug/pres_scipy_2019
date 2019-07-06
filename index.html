@@ -34,98 +34,74 @@ fast gradient boosting in Python with Numba
 
 1. Gradient Boosting is a gradient descent
 2. Making it fast with histograms
-3. Pygbm and Numba (and a tiny bit of Cython)
+3. `Numba`: field report (and a tiny bit of `Cython`)
 
 
 ---
 
+class: middle
 # Gradient Boosting
 
 `$$\hat{y}_i = \sum_{m = 1}^{\text{n_iter}} h_m(\mathbf{x}_i)$$`
 
+$h_m$: "weak" estimator that predicts **gradients** (not the target)
+
 This is a gradient descent!
 
-$h_m$: "weak" estimator that predicts **gradients** (not the target!)
+---
 
---
-
-----
-
-Very analoguous to GD for parameter estimation (e.g. linear regression):
-
-- Linear regression: optimize loss w.r.t a parameter
-
-- Gradient boosting: optimize loss w.r.t. "the predictions"
-
+.center[![:scale 100%](gradient_boosting_1.jpg)]
 
 ---
 
-#### Linear regression
-
-Loss: $\mathcal{L} = \sum_i (y_i - \hat{y}_i)^2$ where $\hat{y}_i = \mathbf{x}_i^T\mathbf{\theta}$
-
-Derive loss w.r.t. $\mathbf{\theta}$
-
-$$\mathbf{\theta}^{(m + 1)} = \mathbf{\theta}^{(m)} - \text{learning_rate} *
-\frac{\partial \mathcal{L}}{\partial \mathbf{\theta}^{(m)}}$$
-
---
-
-----
-
-#### Gradient Boosting
-
-Loss: $\mathcal{L} = \sum_i (y_i - \hat{y}_i)^2\ \ \ \ \ \ \ \ \ \ \ \ \ \
-\ \ \ \hat{\mathbf{y}} =
-(\hat{y}_1, ..., \hat{y}_n)$
-
-The loss is a function of $\hat{\mathbf{y}} \in \mathcal{R}^n$ too! (Just like it is a
-function of $\mathbf{\theta} \in \mathcal{R}^d$)
-
-
-Derive loss w.r.t. **the predictions** $\hat{\mathbf{y}}$
-
-$$\hat{\mathbf{y}}^{(m + 1)} = \hat{\mathbf{y}}^{(m)} - \text{learning_rate} *
-   \frac{\partial \mathcal{L}}{\partial \hat{\mathbf{y}}^{(m)}}$$
+.center[![:scale 100%](gradient_boosting_2.jpg)]
 
 ---
 
-$$\hat{\mathbf{y}}^{(m + 1)} = \hat{\mathbf{y}}^{(m)} - \text{learning_rate} *
-   \frac{\partial \mathcal{L}}{\partial \hat{\mathbf{y}}^{(m)}}$$
+.center[![:scale 100%](gradient_boosting_3.jpg)]
+
+---
+
+#### Hack # 1
+
+Optimize w.r.t. predictions: $~~~~\hat{\mathbf{y}}^{(m + 1)} = \hat{\mathbf{y}}^{(m)} - \alpha
+   \frac{\partial \mathcal{L}}{\partial \hat{\mathbf{y}}^{(m)}}$
 
 ```py
 def compute_gradient(y_true, y_pred):
-    return -2 * (y_true - y_pred)
+    return -2 * (y_true - y_pred)  # Least squares loss gradient
 
-y_pred = np.zeros(shape=n_samples)  # (or some better init)
+y_pred = np.zeros(shape=n_samples)
+
 for m in range(n_iterations):
     negative_gradient = -compute_gradient(y_true, y_pred)
-    y_pred += learning_rate * negative_gradient
+    y_pred += alpha * negative_gradient
 
-    # save loss value for plotting (least squares loss)
-    loss_values.append(np.mean((y_true_train - y_pred_train)**2))
+    # save training loss value for plotting
+    loss_values.append(np.mean((y_true - y_pred)**2))
 ```
-.center[![:scale 80%](loss_vs_iter.png)]
+.center[![:scale 50%](loss_vs_iter.png)]
+
+--
+
+.center[Prediction for new data???]
 
 ---
 
-```py
-for m in range(n_iterations):
-    negative_gradient = -compute_gradient(y_true, y_pred)
-    y_pred += learning_rate * negative_gradient
-```
-
-OK but how do I compute predictions for unseen samples?
+#### Hack # 2
 
 Let a weak predictor $h$ try to predict the gradients!
+
 
 ```py
 for m in range(n_iterations):
     negative_gradient = -compute_gradient(y_true, y_pred)
     h = DecisionTree().fit(X, y=negative_gradient)
-    y_pred += learning_rate * h.predict(X)
+    y_pred += alpha * h.predict(X)
     self.predictors.append(h)  # save predictor for later
 ```
+
+We can now use the $h_m$ for new data
 
 ```py
 def predict(X):
@@ -141,27 +117,13 @@ That's our gradient descent!
 
 ---
 
-### Receipe for Gradient Boosting
+### Recipe for Gradient Boosting
 
-1. Optimize loss w.r.t **predictions** instead of a model parameter
-2. Predict the gradient step with a base estimator (a regressor)
-3. Use these base estimators to predict for unseen data
+1. Choose a (differentiable) loss
+2. Optimize loss w.r.t **predictions** instead of a model parameter
+3. Predict the GD step with a base estimator (a regressor)
+4. Use these base estimators to predict unseen data
 
-```py
-for m in range(n_iterations):
-    negative_gradient = -compute_gradient(y_true, y_pred)
-    h = DecisionTree().fit(X, y=negative_gradient)
-    y_pred += learning_rate * h.predict(X)
-    self.predictors.append(h)  # save predictor for later
-```
-
-```py
-def predict(X):
-    pred = np.zeros(...)
-    for h in self.predictors:
-        pred += h.predict(X)
-    return pred
-```
 
 ---
 
@@ -235,34 +197,21 @@ Histograms are then computed at each node, for each feature
 
 ---
 
-#### Before / Now
+### Split finding now
 
-.center[![:scale 85%](new_splitting_1.jpg)]
-
----
-
-#### Before / Now
-
-.center[![:scale 85%](new_splitting_2.jpg)]
+.center[![:scale 100%](splitting_new_1.jpg)]
 
 ---
 
-#### Before / Now
+### Split finding now
 
-.center[![:scale 85%](new_splitting_3.jpg)]
-
----
-
-#### Before / Now
-
-.center[![:scale 85%](new_splitting_4.jpg)]
+.center[![:scale 100%](splitting_new_2.jpg)]
 
 ---
 
-#### Before / Now
+### Split finding now
 
-.center[![:scale 85%](new_splitting_5.jpg)]
-
+.center[![:scale 100%](splitting_new_3.jpg)]
 
 ---
 
@@ -277,9 +226,7 @@ Histograms are then computed at each node, for each feature
 
 --
 
-.center[Use subtraction trick!]
-.center[c = a - b]
-
+.center[For half of the nodes:]
 .center[$\mathcal{O}(n)$ --> $\mathcal{O}(\text{n_bins})$]
 
 
@@ -324,7 +271,7 @@ def subtract_histograms(hist_a, hist_b):
 
 --
 
-Support for parallelization (OpenMP)
+Support for parallelization (OpenMP or Intel TBB)
 
 ```py
 for feature in prange(n_features):  # parallel loop
@@ -341,26 +288,54 @@ for feature in prange(n_features):  # parallel loop
 
 ---
 
-can optimize list of lists (with different sizes!)
+```py
+for m in range(n_iterations):  # main GB loop
+    ...
+    y_pred += h.predict(X)  # can be optimized for training data!
+```
+
+.center[![:scale 50%](leaves_data.jpg)]
+
+Lists of different length? No problem
 
 ```py
 @njit(parallel=True)
-def _update_raw_predictions(leaves_data, raw_predictions):
+def update_predictions(leaves_data, y_pred):
     for leaf_idx in prange(len(leaves_data)):
         leaf_value, sample_indices = leaves_data[leaf_idx]
         for sample_idx in sample_indices:
-            raw_predictions[sample_idx] += leaf_value
+            y_pred[sample_idx] += leaf_value
 ```
 
-TODO: Ouuuups c'est deprecated, en attente de leur reponse...
+---
+
+### It's fast
+
+&nbsp;
+&nbsp;
+&nbsp;
+
+Higgs boson dataset (10E7 samples), 20 trees, 4 cores
+
+```
+pygbm (ignoring compile time!)
+done in 42.851s, ROC AUC: 0.7229, ACC: 0.7245
+```
+
+```
+Lightgbm
+done in 42.400s, ROC AUC: 0.7232, ACC: 0.7250
+```
+
 ---
 
 ### Overall experience with Numba
 
-- low barrier to entry
 - the doc is good ♥♥♥
+- low barrier to entry
 - from slow code to fast code: easy process
 - code looks like Python (with for loops): stay Pythonic
+- it works
 
 --
 
@@ -379,6 +354,7 @@ Things I wish would improve:
     - use parallelization in methods
     - parallel loop over tuples
     - control OpenMP thread scheduling
+    - profiling?
     - ...
 
 --
