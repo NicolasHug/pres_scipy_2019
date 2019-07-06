@@ -17,7 +17,7 @@
 
 class:center, middle
 
-# Gradient Boosting with Numba
+# Fast gradient Boosting with Numba
 
 ---
 
@@ -28,13 +28,19 @@ class:middle
 [Olivier Grisel](http://ogrisel.com/), INRIA Paris
 
 [pygbm](https://github.com/ogrisel/pygbm):
-fast gradient boosting in Python with Numba
+fast gradient boosting in Python with `Numba`
 
 ### Outline
 
 1. Gradient Boosting is a gradient descent
 2. Making it fast with histograms
 3. `Numba`: field report (and a tiny bit of `Cython`)
+
+&nbsp;
+&nbsp;
+&nbsp;
+
+.center[slides at [https://bit.ly/2YFaIPO](https://bit.ly/2YFaIPO)]
 
 
 ---
@@ -90,7 +96,7 @@ for m in range(n_iterations):
 
 #### Hack # 2
 
-Let a weak predictor $h$ try to predict the gradients!
+Train weak predictor $h$ to predict the gradients!
 
 
 ```py
@@ -107,7 +113,7 @@ We can now use the $h_m$ for new data
 def predict(X):
     pred = np.zeros(...)
     for h in self.predictors:
-        pred += h.predict(X)
+        pred += alpha * h.predict(X)
     return pred
 ```
 
@@ -145,6 +151,8 @@ for m in range(n_iterations):
 ```
 
 .center[![:scale 60%](tree_building.jpg)]
+
+.center[Repeated for each tree, at every node]
 
 
 ---
@@ -243,7 +251,7 @@ class:center, middle
 &nbsp;
 &nbsp;
 
-GBDT implementation with numba:
+GBDT implementation with `Numba`:
 
 [github.com/ogrisel/pygbm](https://github.com/ogrisel/pygbm)
 
@@ -288,23 +296,24 @@ for feature in prange(n_features):  # parallel loop
 
 ---
 
+Lists of different length? No problem
+
 ```py
 for m in range(n_iterations):  # main GB loop
     ...
     y_pred += h.predict(X)  # can be optimized for training data!
+    ...
 ```
 
 .center[![:scale 50%](leaves_data.jpg)]
 
-Lists of different length? No problem
-
 ```py
 @njit(parallel=True)
 def update_predictions(leaves_data, y_pred):
-    for leaf_idx in prange(len(leaves_data)):
-        leaf_value, sample_indices = leaves_data[leaf_idx]
-        for sample_idx in sample_indices:
-            y_pred[sample_idx] += leaf_value
+    for leaf in prange(len(leaves_data)):
+        leaf_value, sample_indices = leaves_data[leaf]
+        for i in sample_indices:
+            y_pred[i] += leaf_value
 ```
 
 ---
